@@ -1,0 +1,29 @@
+# A Nitro Sandbox Pod with guestwatch as a sidecar. Replace the workload
+# container with your own. Set GUESTWATCH_IMAGE and render with envsubst.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guestwatch-example
+spec:
+  runtimeClassName: isolated-sandbox
+  # Inside a Nitro Sandbox this is the PID namespace of the Pod's own
+  # microVM, not the node's.
+  hostPID: true
+  containers:
+    - name: guestwatch
+      image: ${GUESTWATCH_IMAGE}
+      args: ["--require=exec,net,file"]
+      securityContext:
+        privileged: true
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {cpu: 500m, memory: 128Mi}
+    - name: workload
+      image: public.ecr.aws/amazonlinux/amazonlinux:2023
+      command: ["sleep", "infinity"]
+      securityContext:
+        runAsUser: 1000
+        allowPrivilegeEscalation: false
+      resources:
+        requests: {cpu: 250m, memory: 256Mi}
+        limits: {cpu: 500m, memory: 256Mi}
