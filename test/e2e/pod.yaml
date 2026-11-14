@@ -1,0 +1,42 @@
+# End-to-end test Pod. Rendered by run.sh with envsubst.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guestwatch-e2e
+spec:
+  runtimeClassName: ${RUNTIME_CLASS}
+  hostPID: true
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: guestwatch
+      image: ${GUESTWATCH_IMAGE}
+      args:
+        - --require=exec,net,file
+        - --heartbeat=5s
+        - --allow-cidr=10.0.0.0/8,172.16.0.0/12
+        - --watch=/usr/local/sbin,/usr/local/bin,/usr/sbin,/usr/bin,/sbin,/bin,/tmp,/var/tmp,/dev/shm,/etc,/root,/home,/tmp/abs
+      securityContext:
+        privileged: true
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {cpu: 500m, memory: 128Mi}
+    # Unprivileged workload. /tmp/abs is an absolute symlink inside the
+    # container; the agent must resolve it inside the container. "$$$$" is
+    # "$$" after Kubernetes unescapes it: the shell's PID, kept so that run.sh
+    # can stop the container.
+    - name: workload
+      image: public.ecr.aws/amazonlinux/amazonlinux:2023
+      command: ["sh", "-c", "mkdir -p /tmp/real && ln -sfn /tmp/real /tmp/abs && echo $$$$ > /tmp/main.pid && exec sleep infinity"]
+      securityContext:
+        runAsUser: 1000
+        allowPrivilegeEscalation: false
+      resources:
+        requests: {cpu: 250m, memory: 256Mi}
+        limits: {cpu: 500m, memory: 256Mi}
+    # Root, but not privileged: can write to binary directories.
+    - name: workload-root
+      image: public.ecr.aws/amazonlinux/amazonlinux:2023
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits: {cpu: 250m, memory: 128Mi}
